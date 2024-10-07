@@ -1,0 +1,45 @@
+# Parallelization
+Partition : 8 1 1
+
+# Mesh definition
+Lx : 0.3125
+Ly : 0.3125
+Lz : 0.3125
+nx : 96
+ny : 96
+nz : 96
+tank radius : 0.14
+tank height : 0.3
+liquid height : 0.15
+
+# Fluid properties
+Gravity :                   0 -9.81 0
+Dynamic viscosity:          0.001
+Density :                   1000
+
+# Rotor Disk properties
+# Blade
+Number of radical points : 2
+Blade radius : 0.03 0.08
+Blade twists : -30.0 -30.0
+Blade Chords : 0.02 0.02
+Number of azimuthal points : 9
+Blade AoA : -180 -135 -90 -45 0 45 90 135 180
+Blade Cd : 0 1.0 1.25 1.0 0 1.0 1.25 1.0 0
+Blade Cl : 0 1.0 0 -1.0 0 1.0 0 -1.0 0
+# Rotor Disk
+Rotor Disk number of blades : 4
+Rotor Disk min radius : 0.03
+Rotor Disk max radius : 0.08
+Rotor Disk center : 0.0 0.08 0.0
+Rotor Disk axis : 0.0 1.0 0.0
+Rotor Disk reference direction : 1.0 0.0 0.0
+Rotor Disk angular velocity : 320      # rpm
+
+# Time integration
+Max timestep size : 1e-3
+Max cfl number :    1
+Max time :          0.9
+
+# Ensight output
+Ensight output period : 1e-2
