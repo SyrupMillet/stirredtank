@@ -1,13 +1,13 @@
 # Parallelization
-Partition : 8 1 1
+Partition : 1 8 1
 
 # Mesh definition
 Lx : 0.3125
 Ly : 0.3125
 Lz : 0.3125
-nx : 96
-ny : 96
-nz : 96
+nx : 80
+ny : 80
+nz : 80
 tank radius : 0.14
 tank height : 0.3
 liquid height : 0.15
@@ -16,6 +16,14 @@ liquid height : 0.15
 Gravity :                   0 -9.81 0
 Dynamic viscosity:          0.001
 Density :                   1000
+
+# Particle parameters
+Coefficient of restitution : 0.8
+Friction coefficient : 0.1
+Number of particles : 3000
+Particle density :  850
+Particle diameter : 1e-3
+#Collision timescale : 15e-5
 
 # Rotor Disk properties
 # Blade
@@ -37,9 +45,9 @@ Rotor Disk reference direction : 1.0 0.0 0.0
 Rotor Disk angular velocity : 320      # rpm
 
 # Time integration
-Max timestep size : 1e-3
-Max cfl number :    1
-Max time :          0.9
+Max timestep size : 1e-4
+Max cfl number :    0.9
+Max time :          5
 
 # Ensight output
 Ensight output period : 1e-2
