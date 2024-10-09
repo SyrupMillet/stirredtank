@@ -43,8 +43,7 @@ module simulation
    real(WP), dimension(:,:,:), allocatable :: rho
    real(WP), dimension(:,:,:), allocatable :: srcUlp,srcVlp,srcWlp
 
-   !> Integral of pressure residual
-   real(WP) :: int_RP=0.0_WP
+   real(WP) :: int_RP
 
    !> Viscosity
    real(WP) :: visc
@@ -97,7 +96,7 @@ contains
          ! Get tank radius
          call param_read("Rotor Disk center", diskPos)
          call param_read('tank radius',tankRadius)
-         npPerAxis = int(floor(tankRadius/(sqrt(2.0_WP)*cfg%min_meshsize)))
+         npPerAxis = int(floor(tankRadius/(sqrt(2.0_WP)*cfg%min_meshsize)))*2
          xStart = -0.5_WP*npPerAxis*cfg%min_meshsize
          zStart = -0.5_WP*npPerAxis*cfg%min_meshsize
          yStart = diskPos(2)
@@ -249,6 +248,7 @@ contains
          call ens_out%add_scalar('diskArea',rd%area)
          call ens_out%add_vector('diskForce',rd%forceX,rd%forceY,rd%forceZ)
          call ens_out%add_scalar('Density',fs%rho)
+         call ens_out%add_scalar("viscosity",fs%visc)
          call ens_out%add_scalar('epsp',lp%VF)
          call ens_out%add_particle('particles',pmesh)
          ! Output to ensight
@@ -411,8 +411,10 @@ contains
                call fs%cfg%sync(fs%U)
                call fs%cfg%sync(fs%V)
                call fs%cfg%sync(fs%W)
+               call fs%rho_multiply()
             end block ibforcing
 
+         
             ! Solve Poisson equation
             call fs%get_div(drhodt=resRho)
             fs%psolv%rhs=-fs%cfg%vol*fs%div/time%dtmid

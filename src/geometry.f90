@@ -70,7 +70,7 @@ contains
          use ibconfig_class, only: bigot,sharp
          use param,          only: param_read
          integer :: i,j,k
-         real(WP) :: xm, ym, zm, tmp
+         real(WP) :: xm, ym, zm, tmp1, tmp2
          real(WP) :: Ly
 
          ! Read in tank radius
@@ -82,13 +82,15 @@ contains
             do j=cfg%jmino_,cfg%jmaxo_
                do i=cfg%imino_,cfg%imaxo_
                   xm=cfg%xm(i); ym=cfg%ym(j); zm=cfg%zm(k)
-                  tmp = sqrt(xm**2 + zm**2) - r_tank
-                  if (ym .lt. 0.5_WP*(Ly-height_tank)) then 
-                     tmp = tmp + r_tank
-                  else if (ym .gt. 0.5_WP*(Ly+height_tank)) then
-                     tmp = tmp + r_tank
+                  tmp1 = sqrt(xm**2 + zm**2) - r_tank ! distance to wall
+                  if (ym .gt. 0.5_WP*(Ly+height_tank)) then
+                     tmp2 = ym - 0.5_WP*(Ly+height_tank)
+                  else if (ym .lt. 0.5_WP*(Ly-height_tank)) then
+                     tmp2 = 0.5_WP*(Ly-height_tank) - ym
+                  else
+                     tmp2 = min(ym-0.5_WP*(Ly+height_tank),0.5_WP*(Ly-height_tank)-ym)
                   end if
-                  cfg%Gib(i,j,k)=tmp
+                  cfg%Gib(i,j,k)=max(tmp1,tmp2)
                end do
             end do
          end do
