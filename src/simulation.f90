@@ -43,6 +43,8 @@ module simulation
    real(WP), dimension(:,:,:), allocatable :: rho
    real(WP), dimension(:,:,:), allocatable :: srcUlp,srcVlp,srcWlp
 
+   real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib
+
    real(WP) :: int_RP
 
    !> Viscosity
@@ -74,7 +76,26 @@ contains
          allocate(srcUlp(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(srcVlp(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(srcWlp(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+
+         allocate(Nxib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+         allocate(Nyib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+         allocate(Nzib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+
       end block allocate_work_arrays
+
+      Nxib = cfg%Nib(1,:,:,:)
+      Nyib = cfg%Nib(2,:,:,:)
+      Nzib = cfg%Nib(3,:,:,:)
+
+            ! Initialize time tracker
+      initialize_timetracker: block
+         time=timetracker(amRoot=cfg%amRoot)
+         call param_read('Max timestep size',time%dtmax)
+         call param_read('Max time',time%tmax)
+         call param_read('Max cfl number',time%cflmax)
+         time%dt=time%dtmax
+         time%itmax=2
+      end block initialize_timetracker
 
       ! Initialize LPT solver
       initialize_lpt: block
@@ -216,16 +237,6 @@ contains
 
       end block create_and_initialize_rotorDisk
 
-      ! Initialize time tracker
-      initialize_timetracker: block
-         time=timetracker(amRoot=cfg%amRoot)
-         call param_read('Max timestep size',time%dtmax)
-         call param_read('Max time',time%tmax)
-         call param_read('Max cfl number',time%cflmax)
-         time%dt=time%dtmax
-         time%itmax=2
-      end block initialize_timetracker
-
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
          pmesh=partmesh(nvar=0,nvec=0,name='lpt')
@@ -250,6 +261,7 @@ contains
          call ens_out%add_scalar('Density',fs%rho)
          call ens_out%add_scalar("viscosity",fs%visc)
          call ens_out%add_scalar('epsp',lp%VF)
+         call ens_out%add_vector('Nib',Nxib,Nyib,Nzib)
          call ens_out%add_particle('particles',pmesh)
          ! Output to ensight
          if (ens_evt%occurs()) call ens_out%write_data(time%t)
@@ -337,7 +349,8 @@ contains
          call fs%get_div_stress(resU,resV,resW)
 
          ! =================== Particle Solver ===================
-         call lp%collide(dt=time%dtmid)
+         ! call lp%collide(dt=time%dtmid)
+         call lp%collide(dt=time%dtmid, Gib=cfg%Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
             srcU=srcUlp,srcV=srcVlp,srcW=srcWlp)
 
