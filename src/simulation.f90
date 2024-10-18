@@ -4,7 +4,7 @@ module simulation
    use ddadi_class,       only: ddadi
    use fft3d_class,       only: fft3d
    use lowmach_class,     only: lowmach
-   use lpt_class,         only: lpt
+   use lptl_class,         only: lptl
    use rotorDisk_class,      only: rotorDisk
    use blade_class,          only: blade
    use timetracker_class, only: timetracker
@@ -26,7 +26,7 @@ module simulation
    type(timetracker),   public :: time
    type(rotorDisk),      public :: rd
    type(blade),          public :: bl
-   type(lpt),         public :: lp
+   type(lptl),         public :: lp
 
    !> Ensight postprocessing
    type(ensight)  :: ens_out
@@ -104,7 +104,7 @@ contains
          integer :: i,j,np,npPerAxis, tmp
          real(WP), dimension(3) :: diskPos
          ! Create solver
-         lp=lpt(cfg=cfg,name='LPT')
+         lp=lptl(cfg=cfg,name='LPT')
          ! Get drag model from the inpit
          call param_read('Drag model',lp%drag_model,default='Schiller-Naumann')
          ! Get particle density from the input
@@ -346,11 +346,15 @@ contains
          end where
          fs%visc=fs%visc+sgs%visc
 
-         call fs%get_div_stress(resU,resV,resW)
-
          ! =================== Particle Solver ===================
          ! call lp%collide(dt=time%dtmid)
          call lp%collide(dt=time%dtmid, Gib=cfg%Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
+
+         call lp%add_buoyancy(rho=fs%rho)
+         call fs%get_pgrad(fs%psolv%sol,resU,resV,resW)
+         call lp%add_pressureGrad(pgradx=resU,pgrady=resV,pgradz=resW)
+
+         call fs%get_div_stress(resU,resV,resW)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
             srcU=srcUlp,srcV=srcVlp,srcW=srcWlp)
 
