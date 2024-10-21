@@ -347,7 +347,6 @@ contains
          fs%visc=fs%visc+sgs%visc
 
          ! =================== Particle Solver ===================
-         ! call lp%collide(dt=time%dtmid)
          call lp%collide(dt=time%dtmid, Gib=cfg%Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
 
          call lp%add_buoyancy(rho=fs%rho)
