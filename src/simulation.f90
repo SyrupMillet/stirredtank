@@ -43,7 +43,7 @@ module simulation
    real(WP), dimension(:,:,:), allocatable :: rho
    real(WP), dimension(:,:,:), allocatable :: srcUlp,srcVlp,srcWlp
 
-   real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib
+   real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib, Gib
 
    real(WP) :: int_RP
 
@@ -80,12 +80,14 @@ contains
          allocate(Nxib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(Nyib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(Nzib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+         allocate(Gib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
 
       end block allocate_work_arrays
 
-      Nxib = cfg%Nib(1,:,:,:)
-      Nyib = cfg%Nib(2,:,:,:)
-      Nzib = cfg%Nib(3,:,:,:)
+      Nxib = -1.0_WP*cfg%Nib(1,:,:,:)
+      Nyib = -1.0_WP*cfg%Nib(2,:,:,:)
+      Nzib = -1.0_WP*cfg%Nib(3,:,:,:)
+      Gib = -1.0_WP*cfg%Gib
 
             ! Initialize time tracker
       initialize_timetracker: block
@@ -347,11 +349,10 @@ contains
          fs%visc=fs%visc+sgs%visc
 
          ! =================== Particle Solver ===================
-         call lp%collide(dt=time%dtmid, Gib=cfg%Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
+         call lp%collide(dt=time%dtmid, Gib=Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
 
-         call lp%add_buoyancy(rho=fs%rho)
          call fs%get_pgrad(fs%psolv%sol,resU,resV,resW)
-         call lp%add_pressureGrad(pgradx=resU,pgrady=resV,pgradz=resW)
+         call lp%add_pressureGrad(pgradx=resU,pgrady=resV,pgradz=resW)  ! pressure gradient includes buoyancy
 
          call fs%get_div_stress(resU,resV,resW)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&

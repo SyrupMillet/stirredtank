@@ -1,5 +1,5 @@
 # NGA location if not yet defined
-NGA_HOME = ../../ppNGA2
+NGA_HOME ?= ../../ppNGA2
 
 # Compilation parameters
 PRECISION = DOUBLE
@@ -24,8 +24,8 @@ INCLUDE_LOCATIONS += $(Ulocs)
 VPATH_LOCATIONS   += $(Ulocs)
 
 # External libraries are defined in .profile/.bashrc/.zshrc, but could be defined here as well
-CVODE_INCLUDE_PATH = /usr/local/fortran
-CVODE_LIB_PATH = /usr/local/lib
+# CVODE_INCLUDE_PATH = /usr/local/fortran
+# CVODE_LIB_PATH = /usr/local/lib
 
 # NGA compilation definitions
 include $(NGA_HOME)/tools/GNUMake/Make.defs
@@ -41,12 +41,9 @@ ifdef Ulocs
 endif
 $(info Taking base code from: $(Bdirs))
 
-# F90FLAGS += -fcheck=array-temps
-F90FLAGS += -cpp -g
-
-fincludes += -I$(CVODE_INCLUDE_PATH)
-LDFLAGS += -L$(CVODE_LIB_PATH)
-libraries += -l:libsundials_fcvode_mod.a -l:libsundials_cvode.a 
+# fincludes += -I$(CVODE_INCLUDE_PATH)
+#LDFLAGS += -L$(CVODE_LIB_PATH)
+#libraries += -l:libsundials_fcvode_mod.a -l:libsundials_cvode.a 
 
 # Target definition
 all: $(executable)
