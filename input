@@ -43,12 +43,12 @@ Rotor Disk max radius : 0.08
 Rotor Disk center : 0.0 0.08 0.0
 Rotor Disk axis : 0.0 1.0 0.0
 Rotor Disk reference direction : 1.0 0.0 0.0
-Rotor Disk angular velocity : 240      # rpm
+Rotor Disk angular velocity : 320      # rpm
 
 # Time integration
-Max timestep size : 5e-4
+Max timestep size : 1e-4
 Max cfl number :    0.95
 Max time :          5
 
 # Ensight output
-Ensight output period : 1e-2
+Ensight output period : 1e-3

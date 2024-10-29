@@ -42,8 +42,8 @@ module simulation
    real(WP), dimension(:,:,:,:), allocatable :: SR
    real(WP), dimension(:,:,:), allocatable :: rho
    real(WP), dimension(:,:,:), allocatable :: srcUlp,srcVlp,srcWlp
-
    real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib, Gib
+   real(WP), dimension(:,:,:,:), allocatable :: vort
 
    real(WP) :: int_RP
 
@@ -82,6 +82,8 @@ contains
          allocate(Nzib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(Gib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
 
+         allocate(vort(3,cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+
       end block allocate_work_arrays
 
       Nxib = -1.0_WP*cfg%Nib(1,:,:,:)
@@ -89,7 +91,7 @@ contains
       Nzib = -1.0_WP*cfg%Nib(3,:,:,:)
       Gib = -1.0_WP*cfg%Gib
 
-            ! Initialize time tracker
+      ! Initialize time tracker
       initialize_timetracker: block
          time=timetracker(amRoot=cfg%amRoot)
          call param_read('Max timestep size',time%dtmax)
@@ -197,6 +199,8 @@ contains
          resRho = 0.0_WP
          call fs%get_div(drhodt=resRHO)
 
+         call fs%get_vorticity(vort)
+
       end block create_flow_solver
 
       ! Create an LES model
@@ -241,8 +245,27 @@ contains
 
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
-         pmesh=partmesh(nvar=0,nvec=0,name='lpt')
+         integer :: i
+         pmesh=partmesh(nvar=3,nvec=5,name='lpt')
+         pmesh%varname(1)='diameter'
+         pmesh%varname(2)='Re'
+         pmesh%varname(3)="Stk"
+         pmesh%vecname(1)='velocity'
+         pmesh%vecname(2)='ang_vel'
+         pmesh%vecname(3)='Acol'
+         pmesh%vecname(4)='Tcol'
+         pmesh%vecname(5)='Tshear'
          call lp%update_partmesh(pmesh)
+         do i=1,lp%np_
+            pmesh%var(1,i)=lp%p(i)%d
+            pmesh%var(2,i)=lp%p(i)%Re
+            pmesh%var(3,i)=lp%p(i)%St
+            pmesh%vec(:,1,i)=lp%p(i)%vel
+            pmesh%vec(:,2,i)=lp%p(i)%angVel
+            pmesh%vec(:,3,i)=lp%p(i)%Acol
+            pmesh%vec(:,4,i)=lp%p(i)%Tcol
+            pmesh%vec(:,5,i)=lp%p(i)%Tshear
+         end do
       end block create_pmesh
 
       ! Add Ensight output
@@ -257,14 +280,15 @@ contains
          call ens_out%add_scalar('Gib',cfg%Gib)
          call ens_out%add_scalar('VF',cfg%VF)
          call ens_out%add_scalar('pressure',fs%P)
-         call ens_out%add_scalar('divergence',fs%div)
-         call ens_out%add_scalar('diskArea',rd%area)
+         ! call ens_out%add_scalar('divergence',fs%div)
+         ! call ens_out%add_scalar('diskArea',rd%area)
          call ens_out%add_vector('diskForce',rd%forceX,rd%forceY,rd%forceZ)
-         call ens_out%add_scalar('Density',fs%rho)
+         ! call ens_out%add_scalar('Density',fs%rho)
          call ens_out%add_scalar("viscosity",fs%visc)
          call ens_out%add_scalar('epsp',lp%VF)
-         call ens_out%add_vector('Nib',Nxib,Nyib,Nzib)
+         ! call ens_out%add_vector('Nib',Nxib,Nyib,Nzib)
          call ens_out%add_particle('particles',pmesh)
+         call ens_out%add_vector('vorticity',vort(1,:,:,:),vort(2,:,:,:),vort(3,:,:,:))
          ! Output to ensight
          if (ens_evt%occurs()) call ens_out%write_data(time%t)
       end block create_ensight
@@ -340,14 +364,6 @@ contains
          ! Reset here fluid properties
          fs%visc=visc
 
-         ! Turbulence modeling
-         call fs%get_strainrate(SR=SR)
-         call sgs%get_visc(type=constant_smag,dt=time%dtold,rho=fs%rho,Ui=Ui,Vi=Vi,Wi=Wi,SR=SR)
-         where (sgs%visc.lt.-fs%visc)
-            sgs%visc=-fs%visc
-         end where
-         fs%visc=fs%visc+sgs%visc
-
          ! =================== Particle Solver ===================
          call lp%collide(dt=time%dtmid, Gib=Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
 
@@ -356,7 +372,16 @@ contains
 
          call fs%get_div_stress(resU,resV,resW)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
-            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp)
+            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,vortx=vort(1,:,:,:),vorty=vort(2,:,:,:),vortz=vort(3,:,:,:))
+
+         ! Turbulence modeling
+         call fs%get_strainrate(SR=SR)
+         call sgs%get_visc(type=constant_smag,dt=time%dtold,rho=fs%rho,Ui=Ui,Vi=Vi,Wi=Wi,SR=SR)
+         where (sgs%visc.lt.-fs%visc)
+            sgs%visc=-fs%visc
+         end where
+         fs%visc=fs%visc+sgs%visc
+
 
          ! Update density based on particle volume fraction
          fs%rho=rho*(1.0_WP-lp%VF)
@@ -431,7 +456,7 @@ contains
                call fs%rho_multiply()
             end block ibforcing
 
-         
+
             ! Solve Poisson equation
             call fs%get_div(drhodt=resRho)
             fs%psolv%rhs=-fs%cfg%vol*fs%div/time%dtmid
@@ -457,10 +482,24 @@ contains
          ! Recompute interpolated velocity and divergence
          call fs%interp_vel(Ui,Vi,Wi)
          call fs%get_div(drhodt=resRho)
+         call fs%get_vorticity(vort)
 
          ! Output to ensight
          if (ens_evt%occurs()) then
-            call lp%update_partmesh(pmesh)
+            update_pmesh: block
+               integer :: i
+               call lp%update_partmesh(pmesh)
+               do i=1,lp%np_
+                  pmesh%var(1,i)=lp%p(i)%d
+                  pmesh%var(2,i)=lp%p(i)%Re
+                  pmesh%var(3,i)=lp%p(i)%St
+                  pmesh%vec(:,1,i)=lp%p(i)%vel
+                  pmesh%vec(:,2,i)=lp%p(i)%angVel
+                  pmesh%vec(:,3,i)=lp%p(i)%Acol
+                  pmesh%vec(:,4,i)=lp%p(i)%Tcol
+                  pmesh%vec(:,5,i)=lp%p(i)%Tshear
+               end do
+            end block update_pmesh
             call ens_out%write_data(time%t)
          end if
 

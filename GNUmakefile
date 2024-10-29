@@ -1,5 +1,5 @@
 # NGA location if not yet defined
-NGA_HOME ?= ../../ppNGA2
+NGA_HOME = ../../ppNGA2
 
 # Compilation parameters
 PRECISION = DOUBLE
@@ -31,7 +31,7 @@ VPATH_LOCATIONS   += $(Ulocs)
 include $(NGA_HOME)/tools/GNUMake/Make.defs
 
 # Include NGA base code
-Bdirs   := variable_density particles core data solver config grid libraries rotor_disk transform subgrid 
+Bdirs   := variable_density core data solver config grid libraries rotor_disk transform subgrid 
 Bpack   += $(foreach dir, $(Bdirs), $(NGA_HOME)/src/$(dir)/Make.package)
 include $(Bpack)
 
