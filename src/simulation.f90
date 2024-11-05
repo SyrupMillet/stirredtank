@@ -110,7 +110,7 @@ contains
          ! Create solver
          lp=lptl(cfg=cfg,name='LPT')
          ! Get drag model from the inpit
-         call param_read('Drag model',lp%drag_model,default='Schiller-Naumann')
+         call param_read('Drag model',lp%drag_model,default='Tenneti')
          ! Get particle density from the input
          call param_read('Particle density',lp%rho)
          ! Get particle diameter from the input
@@ -142,7 +142,7 @@ contains
                lp%p(i)%pos= [px,py,pz]
                ! Give zero velocity
                lp%p(i)%vel=0.0_WP
-               lp%p(i)%angVel=0.0_WP
+               lp%p(i)%angVel=(/200_WP*epsilon(1.0_WP),0.0_WP,0.0_WP/)
                ! Zero out collision forces
                lp%p(i)%Acol=0.0_WP
                lp%p(i)%Tcol=0.0_WP
@@ -246,25 +246,27 @@ contains
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
          integer :: i
-         pmesh=partmesh(nvar=3,nvec=5,name='lpt')
+         pmesh=partmesh(nvar=5,nvec=5,name='lpt')
          pmesh%varname(1)='diameter'
-         pmesh%varname(2)='Re'
-         pmesh%varname(3)="Stk"
+         pmesh%varname(2)='Re_p'
+         pmesh%varname(3)='Re_omega'
+         pmesh%varname(4)='nondimOmega_P'
+         pmesh%varname(5)='nondimOmega_F'
          pmesh%vecname(1)='velocity'
          pmesh%vecname(2)='ang_vel'
          pmesh%vecname(3)='Acol'
          pmesh%vecname(4)='Tcol'
-         pmesh%vecname(5)='Tshear'
          call lp%update_partmesh(pmesh)
          do i=1,lp%np_
             pmesh%var(1,i)=lp%p(i)%d
-            pmesh%var(2,i)=lp%p(i)%Re
-            pmesh%var(3,i)=lp%p(i)%St
+            pmesh%var(2,i)=lp%p(i)%Re_p
+            pmesh%var(3,i)=lp%p(i)%Re_omega
+            pmesh%var(4,i)=lp%p(i)%nondimOmega_P
+            pmesh%var(5,i)=lp%p(i)%nondimOmega_F
             pmesh%vec(:,1,i)=lp%p(i)%vel
             pmesh%vec(:,2,i)=lp%p(i)%angVel
             pmesh%vec(:,3,i)=lp%p(i)%Acol
             pmesh%vec(:,4,i)=lp%p(i)%Tcol
-            pmesh%vec(:,5,i)=lp%p(i)%Tshear
          end do
       end block create_pmesh
 
@@ -491,13 +493,14 @@ contains
                call lp%update_partmesh(pmesh)
                do i=1,lp%np_
                   pmesh%var(1,i)=lp%p(i)%d
-                  pmesh%var(2,i)=lp%p(i)%Re
-                  pmesh%var(3,i)=lp%p(i)%St
+                  pmesh%var(2,i)=lp%p(i)%Re_p
+                  pmesh%var(3,i)=lp%p(i)%Re_omega
+                  pmesh%var(4,i)=lp%p(i)%nondimOmega_P
+                  pmesh%var(5,i)=lp%p(i)%nondimOmega_F
                   pmesh%vec(:,1,i)=lp%p(i)%vel
                   pmesh%vec(:,2,i)=lp%p(i)%angVel
                   pmesh%vec(:,3,i)=lp%p(i)%Acol
                   pmesh%vec(:,4,i)=lp%p(i)%Tcol
-                  pmesh%vec(:,5,i)=lp%p(i)%Tshear
                end do
             end block update_pmesh
             call ens_out%write_data(time%t)

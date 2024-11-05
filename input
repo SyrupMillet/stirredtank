@@ -5,9 +5,9 @@ Partition : 1 1 8
 Lx : 0.32
 Ly : 0.32
 Lz : 0.32
-nx : 96
-ny : 96
-nz : 96
+nx : 80
+ny : 80
+nz : 80
 tank radius : 0.14
 tank height : 0.28
 liquid height : 0.15
@@ -21,9 +21,9 @@ Density :                   1000
 Coefficient of restitution : 0.8
 Wall restitution : 0.8
 Friction coefficient : 0.1
-Number of particles : 3000
-Particle density :  850
-Particle diameter : 1e-3
+Number of particles : 2000
+Particle density :  900
+Particle diameter : 2e-3
 #Collision timescale : 15e-5
 
 # Rotor Disk properties
@@ -51,4 +51,4 @@ Max cfl number :    0.95
 Max time :          5
 
 # Ensight output
-Ensight output period : 1e-3
+Ensight output period : 1e-2
