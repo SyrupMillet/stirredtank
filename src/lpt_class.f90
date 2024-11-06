@@ -36,6 +36,7 @@ module lpt_class
       !> MPI_DOUBLE_PRECISION data
       real(WP) :: Re_p                      !< Reynolds number of particle
       real(WP) :: Re_omega                  !< Reynolds number of particle rotation
+      real(WP) :: Re_omega_rela                  
       real(WP) :: nondimOmega_P            !< Non-dimensional particle rotation rate
       real(WP) :: nondimOmega_F            !< Non-dimensional fluid rotation rate
       !> MPI_INTEGER data
@@ -44,7 +45,7 @@ module lpt_class
    end type part
    !> Number of blocks, block length, and block types in a particle
    integer, parameter                         :: part_nblock=4
-   integer           , dimension(part_nblock) :: part_lblock=[1,17,4,4]
+   integer           , dimension(part_nblock) :: part_lblock=[1,17,5,4]
    type(MPI_Datatype), dimension(part_nblock) :: part_tblock=[MPI_INTEGER8,MPI_DOUBLE_PRECISION,MPI_DOUBLE_PRECISION,MPI_INTEGER]
    !> MPI_PART derived datatype and size
    type(MPI_Datatype) :: MPI_PART
@@ -943,7 +944,8 @@ contains
          fvort(3)=this%cfg%get_scalar(pos=p%pos,i0=p%ind(1),j0=p%ind(2),k0=p%ind(3),S=vort_z,bc='n')
 
          p%Re_p = frho*norm2(p%vel-fvel)*p%d/fvisc+epsilon(1.0_WP)
-         p%Re_omega = frho*norm2(p%angVel)*p%d/fvisc+epsilon(1.0_WP)
+         p%Re_omega = frho*norm2(p%angVel)**2.0_WP*p%d/fvisc+epsilon(1.0_WP)
+         p%Re_omega_rela = frho*norm2(p%angVel-fvort)**2.0_WP*p%d/fvisc+epsilon(1.0_WP)
          p%nondimOmega_P = norm2(p%angVel)*(p%d/(norm2(fvel-p%vel)+epsilon(1.0_WP)))+epsilon(1.0_WP)
          p%nondimOmega_F = norm2(fvort)*(p%d/(norm2(fvel-p%vel)+epsilon(1.0_WP)))+epsilon(1.0_WP)
       end block interpolate
