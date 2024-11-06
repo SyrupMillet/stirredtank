@@ -32,11 +32,13 @@ module lpt_class
       real(WP), dimension(3) :: angVel     !< Angular velocity of particle
       real(WP), dimension(3) :: Acol       !< Collision acceleration
       real(WP), dimension(3) :: Tcol       !< Collision torque
+      real(WP), dimension(3) :: Torque     !< Torque on particle
       real(WP) :: dt                       !< Time step size for the particle
       !> MPI_DOUBLE_PRECISION data
       real(WP) :: Re_p                      !< Reynolds number of particle
       real(WP) :: Re_omega                  !< Reynolds number of particle rotation
       real(WP) :: Re_omega_rela                  
+      real(WP) :: torqueCoeff               !< Torque coefficient
       real(WP) :: nondimOmega_P            !< Non-dimensional particle rotation rate
       real(WP) :: nondimOmega_F            !< Non-dimensional fluid rotation rate
       !> MPI_INTEGER data
@@ -45,7 +47,7 @@ module lpt_class
    end type part
    !> Number of blocks, block length, and block types in a particle
    integer, parameter                         :: part_nblock=4
-   integer           , dimension(part_nblock) :: part_lblock=[1,17,5,4]
+   integer           , dimension(part_nblock) :: part_lblock=[1,20,6,4]
    type(MPI_Datatype), dimension(part_nblock) :: part_tblock=[MPI_INTEGER8,MPI_DOUBLE_PRECISION,MPI_DOUBLE_PRECISION,MPI_INTEGER]
    !> MPI_PART derived datatype and size
    type(MPI_Datatype) :: MPI_PART
@@ -656,7 +658,7 @@ contains
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: srcW   !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: srcE   !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       integer :: i,j,k,ierr
-      real(WP) :: mydt,dt_done,deng,Ip
+      real(WP) :: mydt,dt_done,deng,Ip,tmpdt,frho
       real(WP), dimension(3) :: acc,torque,dmom,fvel
       real(WP), dimension(this%cfg%imino_:this%cfg%imaxo_,this%cfg%jmino_:this%cfg%jmaxo_,this%cfg%kmino_:this%cfg%kmaxo_) :: sx,sy,sz
       type(part) :: myp,pold
@@ -696,7 +698,10 @@ contains
          ! Time-integrate until dt_done=dt
          dt_done=0.0_WP
          call this%get_nondim_properties(U=U,V=V,W=W,rho=rho,visc=visc,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp)
-         call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp,acc=acc,torque=torque,opt_dt=myp%dt)
+         call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
+         myp%Torque = torque
+         frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
+         myp%torqueCoeff = norm2(torque)/(0.5_WP*frho*norm2(myp%angVel)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
          do while (dt_done.lt.dt)
             ! Decide the timestep size
             mydt=min(myp%dt,dt-dt_done)

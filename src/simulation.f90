@@ -246,17 +246,18 @@ contains
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
          integer :: i
-         pmesh=partmesh(nvar=6,nvec=4,name='lpt')
+         pmesh=partmesh(nvar=6,nvec=5,name='lpt')
          pmesh%varname(1)='diameter'
          pmesh%varname(2)='Re_p'
          pmesh%varname(3)='Re_omega'
          pmesh%varname(4)='nondimOmega_P'
          pmesh%varname(5)='nondimOmega_F'
-         pmesh%varname(6)='Re_omega_rela'
+         pmesh%varname(6)='torque_coeff'
          pmesh%vecname(1)='velocity'
          pmesh%vecname(2)='ang_vel'
          pmesh%vecname(3)='Acol'
          pmesh%vecname(4)='Tcol'
+         pmesh%vecname(5)='torque'
          call lp%update_partmesh(pmesh)
          do i=1,lp%np_
             pmesh%var(1,i)=lp%p(i)%d
@@ -264,11 +265,12 @@ contains
             pmesh%var(3,i)=lp%p(i)%Re_omega
             pmesh%var(4,i)=lp%p(i)%nondimOmega_P
             pmesh%var(5,i)=lp%p(i)%nondimOmega_F
-            pmesh%var(6,i)=lp%p(i)%Re_omega_rela
+            pmesh%var(6,i)=lp%p(i)%torqueCoeff
             pmesh%vec(:,1,i)=lp%p(i)%vel
             pmesh%vec(:,2,i)=lp%p(i)%angVel
             pmesh%vec(:,3,i)=lp%p(i)%Acol
             pmesh%vec(:,4,i)=lp%p(i)%Tcol
+            pmesh%vec(:,5,i)=lp%p(i)%torque
          end do
       end block create_pmesh
 
@@ -499,11 +501,12 @@ contains
                   pmesh%var(3,i)=lp%p(i)%Re_omega
                   pmesh%var(4,i)=lp%p(i)%nondimOmega_P
                   pmesh%var(5,i)=lp%p(i)%nondimOmega_F
-                  pmesh%var(6,i)=lp%p(i)%Re_omega_rela
+                  pmesh%var(6,i)=lp%p(i)%torqueCoeff
                   pmesh%vec(:,1,i)=lp%p(i)%vel
                   pmesh%vec(:,2,i)=lp%p(i)%angVel
                   pmesh%vec(:,3,i)=lp%p(i)%Acol
                   pmesh%vec(:,4,i)=lp%p(i)%Tcol
+                  pmesh%vec(:,5,i)=lp%p(i)%torque
                end do
             end block update_pmesh
             call ens_out%write_data(time%t)
