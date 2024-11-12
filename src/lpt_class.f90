@@ -635,7 +635,7 @@ contains
    !> Advance the particle equations by a specified time step dt
    !> p%id=0 => no coll, no solve
    !> p%id=-1=> no coll, no move
-   subroutine advance(this,dt,U,V,W,rho,visc,stress_x,stress_y,stress_z,vortx,vorty,vortz,T,srcU,srcV,srcW,srcE)
+   subroutine advance(this,dt,U,V,W,rho,visc,stress_x,stress_y,stress_z,vortx,vorty,vortz,T,srcU,srcV,srcW,srcE,tdevu,tdevv,tdevw)
       use mpi_f08, only : MPI_SUM,MPI_INTEGER
       use mathtools, only: Pi
       implicit none
@@ -657,6 +657,9 @@ contains
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: srcV   !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: srcW   !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: srcE   !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevu  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevv  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevw  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       integer :: i,j,k,ierr
       real(WP) :: mydt,dt_done,deng,Ip,tmpdt,frho
       real(WP), dimension(3) :: acc,torque,dmom,fvel
@@ -698,7 +701,8 @@ contains
          ! Time-integrate until dt_done=dt
          dt_done=0.0_WP
          call this%get_nondim_properties(U=U,V=V,W=W,rho=rho,visc=visc,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp)
-         call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
+         call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,&
+            tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
          myp%Torque = torque
          frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
          myp%torqueCoeff = norm2(torque)/(0.5_WP*frho*norm2(myp%angVel)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
@@ -710,12 +714,14 @@ contains
             ! Particle moment of inertia per unit mass
             Ip = 0.1_WP*myp%d**2
             ! Advance with Euler prediction
-            call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp,acc=acc,torque=torque,opt_dt=myp%dt)
+            call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,&
+               tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=myp%dt)
             myp%pos=pold%pos+0.5_WP*mydt*myp%vel
             myp%vel=pold%vel+0.5_WP*mydt*(acc+this%gravity+myp%Acol)
             myp%angVel=pold%angVel+0.5_WP*mydt*(torque+myp%Tcol)/Ip
             ! Correct with midpoint rule
-            call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp,acc=acc,torque=torque,opt_dt=myp%dt)
+            call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,&
+               tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=myp%dt)
             myp%pos=pold%pos+mydt*myp%vel
             myp%vel=pold%vel+mydt*(acc+this%gravity+myp%Acol)
             myp%angVel=pold%angVel+mydt*(torque+myp%Tcol)/Ip
@@ -788,7 +794,7 @@ contains
 
 
    !> Calculate RHS of the particle ODEs
-   subroutine get_rhs(this,U,V,W,rho,visc,stress_x,stress_y,stress_z,vort_x,vort_y,vort_z, T,p,acc,torque,opt_dt)
+   subroutine get_rhs(this,U,V,W,rho,visc,stress_x,stress_y,stress_z,vort_x,vort_y,vort_z,tdevu,tdevv,tdevw, T,p,acc,torque,opt_dt)
       implicit none
       class(lpt), intent(inout) :: this
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout) :: U         !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
@@ -802,6 +808,9 @@ contains
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional:: vort_x  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: vort_y  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: vort_z  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevu  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevv  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
+      real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevw  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: T  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       type(part), intent(in) :: p
       real(WP), dimension(3), intent(out) :: acc,torque
@@ -895,7 +904,24 @@ contains
 
       end block compute_lift
 
-      ! Compute fluid torque (assumed Stokes drag)
+      ! Compute acceleration due to added mass
+      compute_added_mass: block
+         real(WP), dimension(3) :: acc_am, DUDt
+
+         ! Compute acceleration of fluid
+         DUDt = this%cfg%get_velocity(pos=p%pos,i0=p%ind(1),j0=p%ind(2),k0=p%ind(3),U=tdevu,V=tdevv,W=tdevw)
+
+         ! implicitly solve added mass acceleration
+         acc_am = 0.5_WP*(frho/this%rho)*(DUDt-(acc+p%Acol+this%gravity))
+         acc_am = acc_am/(1.0_WP+0.5_WP*frho/this%rho)
+
+         ! apply added mass acceleration
+         acc = acc + acc_am
+
+
+      end block compute_added_mass
+
+      ! Compute fluid torque
       compute_torque: block
          use mathtools, only: Pi
          real(WP),dimension(3) :: relAngVel

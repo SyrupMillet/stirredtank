@@ -45,6 +45,9 @@ module simulation
    real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib, Gib
    real(WP), dimension(:,:,:,:), allocatable :: vort
 
+   real(WP), dimension(:,:,:), allocatable :: DuDt, DvDt, DwDt
+   real(WP), dimension(:,:,:,:,:), allocatable :: grad
+
    real(WP) :: int_RP
 
    !> Viscosity
@@ -54,6 +57,32 @@ module simulation
    real(WP) :: cfl, cflc, lp_cfl
 
 contains
+
+   subroutine get_material_deviation
+      implicit none
+      integer :: i,j,k
+      ! Get material deviation
+      call fs%get_gradu(grad)
+
+      ! Get material deviation (total derivative)
+      DuDt = 0.0_WP; DvDt = 0.0_WP; DwDt = 0.0_WP
+
+      do k=fs%cfg%kmin_,fs%cfg%kmax_
+         do j=fs%cfg%jmin_,fs%cfg%jmax_
+            do i=fs%cfg%imin_,fs%cfg%imax_
+               DuDt(i,j,k) = grad(1,1,i,j,k)*Ui(i,j,k) + grad(1,2,i,j,k)*Vi(i,j,k) + grad(1,3,i,j,k)*Wi(i,j,k)
+               DvDt(i,j,k) = grad(2,1,i,j,k)*Ui(i,j,k) + grad(2,2,i,j,k)*Vi(i,j,k) + grad(2,3,i,j,k)*Wi(i,j,k)
+               DwDt(i,j,k) = grad(3,1,i,j,k)*Ui(i,j,k) + grad(3,2,i,j,k)*Vi(i,j,k) + grad(3,3,i,j,k)*Wi(i,j,k)
+            end do
+         end do
+      end do
+      
+      ! Add du/dt
+      DuDt = DuDt + (fs%U-fs%Uold)/time%dtmid
+      DvDt = DvDt + (fs%V-fs%Vold)/time%dtmid
+      DwDt = DwDt + (fs%W-fs%Wold)/time%dtmid
+      
+   end subroutine get_material_deviation
 
    subroutine simulation_init
       use param, only: param_read
@@ -83,6 +112,12 @@ contains
          allocate(Gib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
 
          allocate(vort(3,cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+
+         allocate(DuDt(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+         allocate(DvDt(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+         allocate(DwDt(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
+
+         allocate(grad(3,3,cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
 
       end block allocate_work_arrays
 
@@ -378,7 +413,8 @@ contains
 
          call fs%get_div_stress(resU,resV,resW)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
-            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,vortx=vort(1,:,:,:),vorty=vort(2,:,:,:),vortz=vort(3,:,:,:))
+            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,vortx=vort(1,:,:,:),vorty=vort(2,:,:,:),vortz=vort(3,:,:,:),&
+            tdevu=DuDt,tdevv=DvDt,tdevw=DwDt)
 
          ! Turbulence modeling
          call fs%get_strainrate(SR=SR)
@@ -489,6 +525,7 @@ contains
          call fs%interp_vel(Ui,Vi,Wi)
          call fs%get_div(drhodt=resRho)
          call fs%get_vorticity(vort)
+         call get_material_deviation()
 
          ! Output to ensight
          if (ens_evt%occurs()) then
