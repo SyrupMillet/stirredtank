@@ -661,7 +661,7 @@ contains
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevv  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevw  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       integer :: i,j,k,ierr
-      real(WP) :: mydt,dt_done,deng,Ip,tmpdt,frho
+      real(WP) :: mydt,dt_done,deng,Ip,tmpdt,frho,massp
       real(WP), dimension(3) :: acc,torque,dmom,fvel
       real(WP), dimension(this%cfg%imino_:this%cfg%imaxo_,this%cfg%jmino_:this%cfg%jmaxo_,this%cfg%kmino_:this%cfg%kmaxo_) :: sx,sy,sz
       type(part) :: myp,pold
@@ -698,14 +698,15 @@ contains
          if (this%p(i)%id.eq.0) cycle
          ! Create local copy of particle
          myp=this%p(i)
+         massp = this%rho*Pi/6.0_WP*myp%d**3
          ! Time-integrate until dt_done=dt
          dt_done=0.0_WP
          call this%get_nondim_properties(U=U,V=V,W=W,rho=rho,visc=visc,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp)
          call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,&
             tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
-         myp%Torque = torque
+         myp%Torque = torque*massp
          frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
-         myp%torqueCoeff = norm2(torque)/(0.5_WP*frho*norm2(myp%angVel)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
+         myp%torqueCoeff = norm2(torque*massp)/(0.5_WP*frho*norm2(myp%angVel)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
          do while (dt_done.lt.dt)
             ! Decide the timestep size
             mydt=min(myp%dt,dt-dt_done)
@@ -975,7 +976,7 @@ contains
          fvort(3)=this%cfg%get_scalar(pos=p%pos,i0=p%ind(1),j0=p%ind(2),k0=p%ind(3),S=vort_z,bc='n')
 
          p%Re_p = frho*norm2(p%vel-fvel)*p%d/fvisc+epsilon(1.0_WP)
-         p%Re_omega = frho*norm2(p%angVel)**2.0_WP*p%d/fvisc+epsilon(1.0_WP)
+         p%Re_omega = frho*norm2(p%angVel)*(p%d)**2.0_WP/fvisc+epsilon(1.0_WP)
          p%Re_omega_rela = frho*norm2(p%angVel-fvort)**2.0_WP*p%d/fvisc+epsilon(1.0_WP)
          p%nondimOmega_P = norm2(p%angVel)*(p%d/(norm2(fvel-p%vel)+epsilon(1.0_WP)))+epsilon(1.0_WP)
          p%nondimOmega_F = norm2(fvort)*(p%d/(norm2(fvel-p%vel)+epsilon(1.0_WP)))+epsilon(1.0_WP)

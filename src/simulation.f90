@@ -56,6 +56,9 @@ module simulation
    !> cfl
    real(WP) :: cfl, cflc, lp_cfl
 
+   !> torque
+   real(WP) :: torqueCoeff_avg, Re_p_avg, Re_omega_avg
+
 contains
 
    subroutine get_material_deviation
@@ -83,6 +86,37 @@ contains
       DwDt = DwDt + (fs%W-fs%Wold)/time%dtmid
       
    end subroutine get_material_deviation
+
+   subroutine getAverageParticleCoeff
+      use mpi_f08
+      use parallel, only: MPI_REAL_WP
+      implicit none
+      integer :: i, ierr
+
+      real(WP) :: mytorqueCoeffSum, torqueCoeffSum, myRepSum, RepSum, myReoSum, ReoSum
+      integer :: mytorqueCount, torqueCount
+
+      mytorqueCoeffSum = 0.0_WP ; myRepSum = 0.0_WP ; myReoSum = 0.0_WP
+      mytorqueCount = 0
+
+      do i=1,lp%np_
+         if (lp%p(i)%flag.eq.1.or.lp%p(i)%id.eq.0) cycle
+         mytorqueCoeffSum = mytorqueCoeffSum + lp%p(i)%torqueCoeff
+         myRepSum = myRepSum + lp%p(i)%Re_p
+         myReoSum = myReoSum + lp%p(i)%Re_omega
+         mytorqueCount = mytorqueCount + 1
+      end do
+
+      call MPI_ALLREDUCE(mytorqueCoeffSum, torqueCoeffSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(myRepSum, RepSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(myReoSum, ReoSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(mytorqueCount, torqueCount, 1, MPI_INTEGER, MPI_SUM, cfg%comm, ierr)
+
+      torqueCoeff_avg = torqueCoeffSum / torqueCount
+      Re_p_avg = RepSum / torqueCount
+      Re_omega_avg = ReoSum / torqueCount
+     
+   end subroutine getAverageParticleCoeff
 
    subroutine simulation_init
       use param, only: param_read
@@ -369,14 +403,17 @@ contains
          call lptfile%add_column(time%t,'Time')
          call lptfile%add_column(lp_cfl,'Particle CFL')
          call lptfile%add_column(lp%np,'Particle number')
-         call lptfile%add_column(lp%Umin,'Particle Umin')
-         call lptfile%add_column(lp%Umax,'Particle Umax')
-         call lptfile%add_column(lp%Vmin,'Particle Vmin')
-         call lptfile%add_column(lp%Vmax,'Particle Vmax')
-         call lptfile%add_column(lp%Wmin,'Particle Wmin')
-         call lptfile%add_column(lp%Wmax,'Particle Wmax')
-         call lptfile%add_column(lp%dmin,'Particle dmin')
-         call lptfile%add_column(lp%dmax,'Particle dmax')
+         call lptfile%add_column(torqueCoeff_avg,'Average Torque Coeff')
+         call lptfile%add_column(Re_p_avg,'Average Re_p')
+         call lptfile%add_column(Re_omega_avg,'Average Re_omega')
+         ! call lptfile%add_column(lp%Umin,'Particle Umin')
+         ! call lptfile%add_column(lp%Umax,'Particle Umax')
+         ! call lptfile%add_column(lp%Vmin,'Particle Vmin')
+         ! call lptfile%add_column(lp%Vmax,'Particle Vmax')
+         ! call lptfile%add_column(lp%Wmin,'Particle Wmin')
+         ! call lptfile%add_column(lp%Wmax,'Particle Wmax')
+         ! call lptfile%add_column(lp%dmin,'Particle dmin')
+         ! call lptfile%add_column(lp%dmax,'Particle dmax')
          call lptfile%write()
       end block create_monitor
 
@@ -408,13 +445,12 @@ contains
          ! =================== Particle Solver ===================
          call lp%collide(dt=time%dtmid, Gib=Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
 
-         call fs%get_pgrad(fs%psolv%sol,resU,resV,resW)
-         call lp%add_pressureGrad(pgradx=resU,pgrady=resV,pgradz=resW)  ! pressure gradient includes buoyancy
-
          call fs%get_div_stress(resU,resV,resW)
          call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
             srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,vortx=vort(1,:,:,:),vorty=vort(2,:,:,:),vortz=vort(3,:,:,:),&
             tdevu=DuDt,tdevv=DvDt,tdevw=DwDt)
+
+         call getAverageParticleCoeff()
 
          ! Turbulence modeling
          call fs%get_strainrate(SR=SR)
