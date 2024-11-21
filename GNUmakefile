@@ -1,5 +1,5 @@
 # NGA location if not yet defined
-NGA_HOME = ../../ppNGA2
+NGA_HOME ?= ../../ppNGA2
 
 # Compilation parameters
 PRECISION = DOUBLE

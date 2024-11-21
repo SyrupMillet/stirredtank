@@ -926,7 +926,7 @@ contains
       compute_torque: block
          use mathtools, only: Pi
          real(WP),dimension(3) :: relAngVel
-         real(WP) :: corrV, corrS, Ip, tau_omega
+         real(WP) :: corrV, corrS, Ip, tau_omega, coeff, massp
 
          ! Compute relative angular velocity
          relAngVel=p%angVel-0.5_WP*fvort

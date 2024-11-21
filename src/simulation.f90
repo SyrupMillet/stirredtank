@@ -79,12 +79,12 @@ contains
             end do
          end do
       end do
-      
+
       ! Add du/dt
       DuDt = DuDt + (fs%U-fs%Uold)/time%dtmid
       DvDt = DvDt + (fs%V-fs%Vold)/time%dtmid
       DwDt = DwDt + (fs%W-fs%Wold)/time%dtmid
-      
+
    end subroutine get_material_deviation
 
    subroutine getAverageParticleCoeff
@@ -115,8 +115,32 @@ contains
       torqueCoeff_avg = torqueCoeffSum / torqueCount
       Re_p_avg = RepSum / torqueCount
       Re_omega_avg = ReoSum / torqueCount
-     
+
    end subroutine getAverageParticleCoeff
+
+   subroutine checkLargeTorqueCoeff
+      integer :: ip
+      real(WP),dimension(3) :: fvort
+
+      if (time%t.gt.0.2_WP) then
+
+         do ip=1, lp%np_
+            if (lp%p(ip)%id.eq.0) cycle
+            if (lp%p(ip)%torqueCoeff > 500.0_WP) then
+               ! calculate vorticity
+               fvort = cfg%get_velocity(lp%p(ip)%pos,lp%p(ip)%ind(1),lp%p(ip)%ind(2),lp%p(ip)%ind(3),vort(1,:,:,:),vort(2,:,:,:),vort(3,:,:,:))
+               fvort = 0.5_WP*fvort
+               print*, "Large torque coefficient detected at particle ", ip
+               print*, "Torque coefficient: ", lp%p(ip) % torqueCoeff
+               print*, "Angular velocity: ", lp%p(ip) % angVel , "   Vorticity: ", fvort
+            end if
+
+
+
+         end do
+      end if
+
+   end subroutine checkLargeTorqueCoeff
 
    subroutine simulation_init
       use param, only: param_read
@@ -453,6 +477,7 @@ contains
             tdevu=DuDt,tdevv=DvDt,tdevw=DwDt)
 
          call getAverageParticleCoeff()
+         call checkLargeTorqueCoeff()
 
          ! Turbulence modeling
          call fs%get_strainrate(SR=SR)

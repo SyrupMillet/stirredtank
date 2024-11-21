@@ -46,7 +46,7 @@ Rotor Disk reference direction : 1.0 0.0 0.0
 Rotor Disk angular velocity : 320      # rpm
 
 # Time integration
-Max timestep size : 1e-4
+Max timestep size : 5e-5
 Max cfl number :    0.95
 Max time :          2
 
