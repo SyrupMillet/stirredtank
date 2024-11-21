@@ -187,6 +187,8 @@ contains
          ! Get number of particles
          call param_read('Number of particles',np)
 
+         lp%nstep = 2
+
          ! Get tank radius
          call param_read("Rotor Disk center", diskPos)
          call param_read('tank radius',tankRadius)

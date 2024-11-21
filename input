@@ -5,9 +5,9 @@ Partition : 1 1 8
 Lx : 0.32
 Ly : 0.32
 Lz : 0.32
-nx : 80
-ny : 80
-nz : 80
+nx : 96
+ny : 96
+nz : 96
 tank radius : 0.14
 tank height : 0.28
 liquid height : 0.15
@@ -48,7 +48,7 @@ Rotor Disk angular velocity : 320      # rpm
 # Time integration
 Max timestep size : 1e-4
 Max cfl number :    0.95
-Max time :          5
+Max time :          2
 
 # Ensight output
 Ensight output period : 1e-1

@@ -926,7 +926,7 @@ contains
       compute_torque: block
          use mathtools, only: Pi
          real(WP),dimension(3) :: relAngVel
-         real(WP) :: corrV, corrS
+         real(WP) :: corrV, corrS, Ip, tau_omega
 
          ! Compute relative angular velocity
          relAngVel=p%angVel-0.5_WP*fvort
@@ -939,6 +939,10 @@ contains
 
          ! Compute torque
          torque = -6.0_WP*fvisc*(corrS*p%angVel-0.5_WP*corrV*fvort)/this%rho
+
+         Ip = 0.1_WP*p%d**2
+         tau_omega = Ip*norm2(p%angVel-fvort)/(norm2(torque)+epsilon(1.0_WP))
+         opt_dt = min(opt_dt,tau_omega/real(this%nstep,WP))
          
       end block compute_torque
 
