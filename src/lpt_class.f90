@@ -707,7 +707,7 @@ contains
          myp%Torque = torque*massp
          frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
          fvort=this%cfg%get_velocity(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),U=vortx,V=vorty,W=vortz)
-         myp%torqueCoeff = norm2(torque*massp)/(0.5_WP*frho*norm2(myp%angVel-0.5_WP*fvort)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
+         myp%torqueCoeff = (2.0_WP*norm2(torque*massp)/(0.5_WP*myp%d)**5.0_WP)/(frho*sum((myp%angVel-0.5_WP*fvort)**2.0_WP)+epsilon(1.0_WP))
          do while (dt_done.lt.dt)
             ! Decide the timestep size
             mydt=min(myp%dt,dt-dt_done)

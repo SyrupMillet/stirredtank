@@ -126,13 +126,15 @@ contains
 
          do ip=1, lp%np_
             if (lp%p(ip)%id.eq.0) cycle
-            if (lp%p(ip)%torqueCoeff > 500.0_WP) then
+            if (lp%p(ip)%torqueCoeff > 1000.0_WP) then
                ! calculate vorticity
                fvort = cfg%get_velocity(lp%p(ip)%pos,lp%p(ip)%ind(1),lp%p(ip)%ind(2),lp%p(ip)%ind(3),vort(1,:,:,:),vort(2,:,:,:),vort(3,:,:,:))
                fvort = 0.5_WP*fvort
                print*, "Large torque coefficient detected at particle ", ip
                print*, "Torque coefficient: ", lp%p(ip) % torqueCoeff
+               print*, "Torque: ", lp%p(ip) % torque
                print*, "Angular velocity: ", lp%p(ip) % angVel , "   Vorticity: ", fvort
+               print*, "relative velocity mag: ", norm2(lp%p(ip)%vel-fvort)
             end if
 
 
