@@ -662,7 +662,7 @@ contains
       real(WP), dimension(this%cfg%imino_:,this%cfg%jmino_:,this%cfg%kmino_:), intent(inout), optional :: tdevw  !< Needs to be (imino_:imaxo_,jmino_:jmaxo_,kmino_:kmaxo_)
       integer :: i,j,k,ierr
       real(WP) :: mydt,dt_done,deng,Ip,tmpdt,frho,massp
-      real(WP), dimension(3) :: acc,torque,dmom,fvel
+      real(WP), dimension(3) :: acc,torque,dmom,fvel,fvort
       real(WP), dimension(this%cfg%imino_:this%cfg%imaxo_,this%cfg%jmino_:this%cfg%jmaxo_,this%cfg%kmino_:this%cfg%kmaxo_) :: sx,sy,sz
       type(part) :: myp,pold
 
@@ -706,7 +706,8 @@ contains
             tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
          myp%Torque = torque*massp
          frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
-         myp%torqueCoeff = norm2(torque*massp)/(0.5_WP*frho*norm2(myp%angVel)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
+         fvort=this%cfg%get_velocity(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),U=vortx,V=vorty,W=vortz)
+         myp%torqueCoeff = norm2(torque*massp)/(0.5_WP*frho*norm2(myp%angVel-0.5_WP*fvort)**2.0_WP*(0.5_WP*myp%d)**5.0_WP+epsilon(1.0_WP))
          do while (dt_done.lt.dt)
             ! Decide the timestep size
             mydt=min(myp%dt,dt-dt_done)
@@ -941,7 +942,8 @@ contains
          torque = -6.0_WP*fvisc*(corrS*p%angVel-0.5_WP*corrV*fvort)/this%rho
 
          Ip = 0.1_WP*p%d**2
-         tau_omega = Ip*norm2(p%angVel-fvort)/(norm2(torque)+epsilon(1.0_WP))
+         massp = this%rho*Pi/6.0_WP*p%d**3
+         tau_omega = Ip*norm2(p%angVel-fvort)/(norm2(torque*massp)+epsilon(1.0_WP))
          opt_dt = min(opt_dt,tau_omega/real(this%nstep,WP))
          
       end block compute_torque
