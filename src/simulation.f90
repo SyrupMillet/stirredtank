@@ -57,7 +57,7 @@ module simulation
    real(WP) :: cfl, cflc, lp_cfl
 
    !> torque
-   real(WP) :: torqueCoeff_avg, Re_p_avg, Re_omega_avg
+   real(WP) :: torqueCoeff_avg, Re_p_avg, Re_omega_avg, OmegaP_avg, OmegaF_avg, OmegaRela_avg, Torque_avg
 
 contains
 
@@ -94,9 +94,13 @@ contains
       integer :: i, ierr
 
       real(WP) :: mytorqueCoeffSum, torqueCoeffSum, myRepSum, RepSum, myReoSum, ReoSum
+      real(WP) :: mytorque, torque, myOmegaP, OmegaP, myOmegaF, OmegaF, myOmegaRela, OmegaRela
       integer :: mytorqueCount, torqueCount
 
+
+
       mytorqueCoeffSum = 0.0_WP ; myRepSum = 0.0_WP ; myReoSum = 0.0_WP
+      mytorque = 0.0_WP ; myOmegaP = 0.0_WP ; myOmegaF = 0.0_WP ; myOmegaRela = 0.0_WP
       mytorqueCount = 0
 
       do i=1,lp%np_
@@ -104,6 +108,10 @@ contains
          mytorqueCoeffSum = mytorqueCoeffSum + lp%p(i)%torqueCoeff
          myRepSum = myRepSum + lp%p(i)%Re_p
          myReoSum = myReoSum + lp%p(i)%Re_omega
+         mytorque = mytorque + norm2(lp%p(i)%torque)
+         myOmegaP = myOmegaP + norm2(lp%p(i)%OmegaP)
+         myOmegaF = myOmegaF + norm2(lp%p(i)%OmegaF)
+         myOmegaRela = myOmegaRela + norm2(lp%p(i)%OmegaRela)
          mytorqueCount = mytorqueCount + 1
       end do
 
@@ -111,38 +119,20 @@ contains
       call MPI_ALLREDUCE(myRepSum, RepSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
       call MPI_ALLREDUCE(myReoSum, ReoSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
       call MPI_ALLREDUCE(mytorqueCount, torqueCount, 1, MPI_INTEGER, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(mytorque, torque, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(myOmegaP, OmegaP, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(myOmegaF, OmegaF, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
+      call MPI_ALLREDUCE(myOmegaRela, OmegaRela, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
 
       torqueCoeff_avg = torqueCoeffSum / torqueCount
       Re_p_avg = RepSum / torqueCount
       Re_omega_avg = ReoSum / torqueCount
+      OmegaP_avg = OmegaP / torqueCount
+      OmegaF_avg = OmegaF / torqueCount
+      OmegaRela_avg = OmegaRela / torqueCount
+      Torque_avg = torque / torqueCount
 
    end subroutine getAverageParticleCoeff
-
-   subroutine checkLargeTorqueCoeff
-      integer :: ip
-      real(WP),dimension(3) :: fvort
-
-      if (time%t.gt.0.2_WP) then
-
-         do ip=1, lp%np_
-            if (lp%p(ip)%id.eq.0) cycle
-            if (lp%p(ip)%torqueCoeff > 1000.0_WP) then
-               ! calculate vorticity
-               fvort = cfg%get_velocity(lp%p(ip)%pos,lp%p(ip)%ind(1),lp%p(ip)%ind(2),lp%p(ip)%ind(3),vort(1,:,:,:),vort(2,:,:,:),vort(3,:,:,:))
-               fvort = 0.5_WP*fvort
-               print*, "Large torque coefficient detected at particle ", ip
-               print*, "Torque coefficient: ", lp%p(ip) % torqueCoeff
-               print*, "Torque: ", lp%p(ip) % torque
-               print*, "Angular velocity: ", lp%p(ip) % angVel , "   Vorticity: ", fvort
-               print*, "relative velocity mag: ", norm2(lp%p(ip)%vel-fvort)
-            end if
-
-
-
-         end do
-      end if
-
-   end subroutine checkLargeTorqueCoeff
 
    subroutine simulation_init
       use param, only: param_read
@@ -343,7 +333,7 @@ contains
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
          integer :: i
-         pmesh=partmesh(nvar=6,nvec=5,name='lpt')
+         pmesh=partmesh(nvar=6,nvec=8,name='lpt')
          pmesh%varname(1)='diameter'
          pmesh%varname(2)='Re_p'
          pmesh%varname(3)='Re_omega'
@@ -355,6 +345,9 @@ contains
          pmesh%vecname(3)='Acol'
          pmesh%vecname(4)='Tcol'
          pmesh%vecname(5)='torque'
+         pmesh%vecname(6)='fsOmegap'
+         pmesh%vecname(7)='fvOmegaf'
+         pmesh%vecname(8)='relativeOmega'
          call lp%update_partmesh(pmesh)
          do i=1,lp%np_
             pmesh%var(1,i)=lp%p(i)%d
@@ -368,6 +361,9 @@ contains
             pmesh%vec(:,3,i)=lp%p(i)%Acol
             pmesh%vec(:,4,i)=lp%p(i)%Tcol
             pmesh%vec(:,5,i)=lp%p(i)%torque
+            pmesh%vec(:,6,i)=lp%p(i)%OmegaP
+            pmesh%vec(:,7,i)=lp%p(i)%OmegaF
+            pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
          end do
       end block create_pmesh
 
@@ -434,14 +430,10 @@ contains
          call lptfile%add_column(torqueCoeff_avg,'Average Torque Coeff')
          call lptfile%add_column(Re_p_avg,'Average Re_p')
          call lptfile%add_column(Re_omega_avg,'Average Re_omega')
-         ! call lptfile%add_column(lp%Umin,'Particle Umin')
-         ! call lptfile%add_column(lp%Umax,'Particle Umax')
-         ! call lptfile%add_column(lp%Vmin,'Particle Vmin')
-         ! call lptfile%add_column(lp%Vmax,'Particle Vmax')
-         ! call lptfile%add_column(lp%Wmin,'Particle Wmin')
-         ! call lptfile%add_column(lp%Wmax,'Particle Wmax')
-         ! call lptfile%add_column(lp%dmin,'Particle dmin')
-         ! call lptfile%add_column(lp%dmax,'Particle dmax')
+         call lptfile%add_column(OmegaP_avg,'Average OmegaP')
+         call lptfile%add_column(OmegaF_avg,'Average OmegaF')
+         call lptfile%add_column(OmegaRela_avg,'Average OmegaRela')
+         call lptfile%add_column(Torque_avg,'Average Torque')
          call lptfile%write()
       end block create_monitor
 
@@ -479,7 +471,6 @@ contains
             tdevu=DuDt,tdevv=DvDt,tdevw=DwDt)
 
          call getAverageParticleCoeff()
-         call checkLargeTorqueCoeff()
 
          ! Turbulence modeling
          call fs%get_strainrate(SR=SR)
@@ -609,9 +600,36 @@ contains
                   pmesh%vec(:,3,i)=lp%p(i)%Acol
                   pmesh%vec(:,4,i)=lp%p(i)%Tcol
                   pmesh%vec(:,5,i)=lp%p(i)%torque
+                  pmesh%vec(:,6,i)=lp%p(i)%OmegaP
+                  pmesh%vec(:,7,i)=lp%p(i)%OmegaF
+                  pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
                end do
             end block update_pmesh
             call ens_out%write_data(time%t)
+         else
+            if ( (time%t.gt.0.3_WP) .and. (torqueCoeff_avg .gt. 100) ) then
+               update_1pmesh: block
+                  integer :: i
+                  call lp%update_partmesh(pmesh)
+                  do i=1,lp%np_
+                     pmesh%var(1,i)=lp%p(i)%d
+                     pmesh%var(2,i)=lp%p(i)%Re_p
+                     pmesh%var(3,i)=lp%p(i)%Re_omega
+                     pmesh%var(4,i)=lp%p(i)%nondimOmega_P
+                     pmesh%var(5,i)=lp%p(i)%nondimOmega_F
+                     pmesh%var(6,i)=lp%p(i)%torqueCoeff
+                     pmesh%vec(:,1,i)=lp%p(i)%vel
+                     pmesh%vec(:,2,i)=lp%p(i)%angVel
+                     pmesh%vec(:,3,i)=lp%p(i)%Acol
+                     pmesh%vec(:,4,i)=lp%p(i)%Tcol
+                     pmesh%vec(:,5,i)=lp%p(i)%torque
+                     pmesh%vec(:,6,i)=lp%p(i)%OmegaP
+                     pmesh%vec(:,7,i)=lp%p(i)%OmegaF
+                     pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
+                  end do
+               end block update_1pmesh
+               call ens_out%write_data(time%t)
+            end if
          end if
 
          ! Perform and output monitoring

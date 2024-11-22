@@ -34,6 +34,9 @@ module lpt_class
       real(WP), dimension(3) :: Tcol       !< Collision torque
       real(WP), dimension(3) :: Torque     !< Torque on particle
       real(WP) :: dt                       !< Time step size for the particle
+      real(WP), dimension(3) :: OmegaP
+      real(WP), dimension(3) :: OmegaF
+      real(WP), dimension(3) :: OmegaRela
       !> MPI_DOUBLE_PRECISION data
       real(WP) :: Re_p                      !< Reynolds number of particle
       real(WP) :: Re_omega                  !< Reynolds number of particle rotation
@@ -47,7 +50,7 @@ module lpt_class
    end type part
    !> Number of blocks, block length, and block types in a particle
    integer, parameter                         :: part_nblock=4
-   integer           , dimension(part_nblock) :: part_lblock=[1,20,6,4]
+   integer           , dimension(part_nblock) :: part_lblock=[1,29,6,4]
    type(MPI_Datatype), dimension(part_nblock) :: part_tblock=[MPI_INTEGER8,MPI_DOUBLE_PRECISION,MPI_DOUBLE_PRECISION,MPI_INTEGER]
    !> MPI_PART derived datatype and size
    type(MPI_Datatype) :: MPI_PART
@@ -701,13 +704,27 @@ contains
          massp = this%rho*Pi/6.0_WP*myp%d**3
          ! Time-integrate until dt_done=dt
          dt_done=0.0_WP
+
          call this%get_nondim_properties(U=U,V=V,W=W,rho=rho,visc=visc,vort_x=vortx,vort_y=vorty,vort_z=vortz,p=myp)
          call this%get_rhs(U=U,V=V,W=W,rho=rho,visc=visc,stress_x=sx,stress_y=sy,stress_z=sz,vort_x=vortx,vort_y=vorty,vort_z=vortz,&
             tdevu=tdevu,tdevv=tdevv,tdevw=tdevw,p=myp,acc=acc,torque=torque,opt_dt=tmpdt)
+
+         ! Calculate torque coefficient
          myp%Torque = torque*massp
          frho=this%cfg%get_scalar(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),S=rho,bc='n')
          fvort=this%cfg%get_velocity(pos=myp%pos,i0=myp%ind(1),j0=myp%ind(2),k0=myp%ind(3),U=vortx,V=vorty,W=vortz)
          myp%torqueCoeff = (2.0_WP*norm2(torque*massp)/(0.5_WP*myp%d)**5.0_WP)/(frho*sum((myp%angVel-0.5_WP*fvort)**2.0_WP)+epsilon(1.0_WP))
+         
+         block
+            real(WP) :: fs, fv
+            fs = 1.0_WP+0.012_WP*myp%Re_omega**0.7_WP
+            fv = 1.0_WP 
+            myp%OmegaP = fs*myp%angVel
+            myp%OmegaF = fv*fvort
+            myp%OmegaRela = myp%OmegaP-0.5_WP*myp%OmegaF
+         
+         end block
+         
          do while (dt_done.lt.dt)
             ! Decide the timestep size
             mydt=min(myp%dt,dt-dt_done)
