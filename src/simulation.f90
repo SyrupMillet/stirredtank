@@ -43,7 +43,6 @@ module simulation
    real(WP), dimension(:,:,:), allocatable :: rho
    real(WP), dimension(:,:,:), allocatable :: srcUlp,srcVlp,srcWlp
    real(WP), dimension(:,:,:), allocatable :: Nxib, Nyib, Nzib, Gib
-   real(WP), dimension(:,:,:,:), allocatable :: vort
 
    real(WP), dimension(:,:,:), allocatable :: DuDt, DvDt, DwDt
    real(WP), dimension(:,:,:,:,:), allocatable :: grad
@@ -61,7 +60,7 @@ module simulation
 
 contains
 
-   subroutine get_material_deviation
+   subroutine get_fluid_acc
       implicit none
       integer :: i,j,k
       ! Get material deviation
@@ -85,7 +84,7 @@ contains
       DvDt = DvDt + (fs%V-fs%Vold)/time%dtmid
       DwDt = DwDt + (fs%W-fs%Wold)/time%dtmid
 
-   end subroutine get_material_deviation
+   end subroutine get_fluid_acc
 
    subroutine getAverageParticleCoeff
       use mpi_f08
@@ -93,46 +92,90 @@ contains
       implicit none
       integer :: i, ierr
 
-      real(WP) :: mytorqueCoeffSum, torqueCoeffSum, myRepSum, RepSum, myReoSum, ReoSum
-      real(WP) :: mytorque, torque, myOmegaP, OmegaP, myOmegaF, OmegaF, myOmegaRela, OmegaRela
+      real(WP) :: myRepSum, RepSum
       integer :: mytorqueCount, torqueCount
 
-
-
-      mytorqueCoeffSum = 0.0_WP ; myRepSum = 0.0_WP ; myReoSum = 0.0_WP
-      mytorque = 0.0_WP ; myOmegaP = 0.0_WP ; myOmegaF = 0.0_WP ; myOmegaRela = 0.0_WP
+      myRepSum = 0.0_WP
       mytorqueCount = 0
 
       do i=1,lp%np_
          if (lp%p(i)%flag.eq.1.or.lp%p(i)%id.eq.0) cycle
-         mytorqueCoeffSum = mytorqueCoeffSum + lp%p(i)%torqueCoeff
          myRepSum = myRepSum + lp%p(i)%Re_p
-         myReoSum = myReoSum + lp%p(i)%Re_omega
-         mytorque = mytorque + norm2(lp%p(i)%torque)
-         myOmegaP = myOmegaP + norm2(lp%p(i)%OmegaP)
-         myOmegaF = myOmegaF + norm2(lp%p(i)%OmegaF)
-         myOmegaRela = myOmegaRela + norm2(lp%p(i)%OmegaRela)
          mytorqueCount = mytorqueCount + 1
       end do
 
-      call MPI_ALLREDUCE(mytorqueCoeffSum, torqueCoeffSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
       call MPI_ALLREDUCE(myRepSum, RepSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
-      call MPI_ALLREDUCE(myReoSum, ReoSum, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
       call MPI_ALLREDUCE(mytorqueCount, torqueCount, 1, MPI_INTEGER, MPI_SUM, cfg%comm, ierr)
-      call MPI_ALLREDUCE(mytorque, torque, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
-      call MPI_ALLREDUCE(myOmegaP, OmegaP, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
-      call MPI_ALLREDUCE(myOmegaF, OmegaF, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
-      call MPI_ALLREDUCE(myOmegaRela, OmegaRela, 1, MPI_REAL_WP, MPI_SUM, cfg%comm, ierr)
 
-      torqueCoeff_avg = torqueCoeffSum / torqueCount
       Re_p_avg = RepSum / torqueCount
-      Re_omega_avg = ReoSum / torqueCount
-      OmegaP_avg = OmegaP / torqueCount
-      OmegaF_avg = OmegaF / torqueCount
-      OmegaRela_avg = OmegaRela / torqueCount
-      Torque_avg = torque / torqueCount
 
    end subroutine getAverageParticleCoeff
+
+   !> 1: du/dx-div/3
+   !> 2: dv/dy-div/3
+   !> 3: dw/dz-div/3
+   !> 4: (du/dy+dv/dx)/2
+   !> 5: (dv/dz+dw/dy)/2
+   !> 6: (dw/dx+du/dz)/2
+   subroutine get_particle_strainrate
+      implicit none
+      integer :: ip, i, j, k
+      real(WP), dimension(3) :: pvel
+      real(WP) :: div
+
+      do ip=1,lp%np_
+         ! Avoid particles with id=0
+         if (lp%p(ip)%id.eq.0) cycle
+         ! get particle velocity
+         pvel = lp%p(ip)%vel
+         ! get particle index
+         i = lp%p(ip)%ind(1); j = lp%p(ip)%ind(2); k = lp%p(ip)%ind(3)
+
+         lp%p(ip)%SR(1) = sum(fs%grdu_x(:,i,j,k)*(fs%U(i:i+1,j,k)-pvel(1)))
+         lp%p(ip)%SR(2) = sum(fs%grdv_y(:,i,j,k)*(fs%V(i,j:j+1,k)-pvel(2)))
+         lp%p(ip)%SR(3) = sum(fs%grdw_z(:,i,j,k)*(fs%W(i,j,k:k+1)-pvel(3)))
+         div = sum(lp%p(ip)%SR(1:3))/3.0_WP
+         lp%p(ip)%SR(1) = lp%p(ip)%SR(1) - div
+         lp%p(ip)%SR(2) = lp%p(ip)%SR(2) - div
+         lp%p(ip)%SR(3) = lp%p(ip)%SR(3) - div
+
+         block
+            integer :: ii, jj, kk
+            real(WP), dimension(i:i+1,j:j+1,k:k) :: dudy, dvdx
+            real(WP), dimension(i:i,j:j+1,k:k+1) :: dvdz, dwdy
+            real(WP), dimension(i:i+1,j:j,k:k+1) :: dwdx, dudz
+
+            kk = k
+            do ii=i,i+1
+               do jj=j,j+1
+                  dudy(ii,jj,kk) = sum(fs%grdu_y(:,ii,jj,kk)*(fs%U(ii,jj-1:jj,kk)-pvel(1)))
+                  dvdx(ii,jj,kk) = sum(fs%grdv_x(:,ii,jj,kk)*(fs%V(ii-1:ii,jj,kk)-pvel(2)))
+               end do
+            end do
+            ii = i
+            do jj=j,j+1
+               do kk=k,k+1
+                  dvdz(ii,jj,kk) = sum(fs%grdv_z(:,ii,jj,kk)*(fs%V(ii,jj,kk-1:kk)-pvel(2)))
+                  dwdy(ii,jj,kk) = sum(fs%grdw_y(:,ii,jj,kk)*(fs%W(ii,jj-1:jj,kk)-pvel(3)))
+               end do
+            end do
+            jj = j
+            do ii=i,i+1
+               do kk=k,k+1
+                  dwdx(ii,jj,kk) = sum(fs%grdw_x(:,ii,jj,kk)*(fs%W(ii-1:ii,jj,kk)-pvel(3)))
+                  dudz(ii,jj,kk) = sum(fs%grdu_z(:,ii,jj,kk)*(fs%U(ii,jj,kk-1:kk)-pvel(1)))
+               end do
+            end do
+
+            lp%p(ip)%SR(4) = 0.125_WP*(sum(dudy)+sum(dvdx))
+            lp%p(ip)%SR(5) = 0.125_WP*(sum(dvdz)+sum(dwdy))
+            lp%p(ip)%SR(6) = 0.125_WP*(sum(dwdx)+sum(dudz))
+
+         end block
+
+      end do
+
+   end subroutine get_particle_strainrate
 
    subroutine simulation_init
       use param, only: param_read
@@ -160,8 +203,6 @@ contains
          allocate(Nyib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(Nzib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(Gib(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
-
-         allocate(vort(3,cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
 
          allocate(DuDt(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
          allocate(DvDt(cfg%imino_:cfg%imaxo_,cfg%jmino_:cfg%jmaxo_,cfg%kmino_:cfg%kmaxo_))
@@ -286,8 +327,6 @@ contains
          resRho = 0.0_WP
          call fs%get_div(drhodt=resRHO)
 
-         call fs%get_vorticity(vort)
-
       end block create_flow_solver
 
       ! Create an LES model
@@ -333,37 +372,25 @@ contains
       ! Create partmesh object for Lagrangian particle output
       create_pmesh: block
          integer :: i
-         pmesh=partmesh(nvar=6,nvec=8,name='lpt')
+         pmesh=partmesh(nvar=2,nvec=6,name='lpt')
          pmesh%varname(1)='diameter'
          pmesh%varname(2)='Re_p'
-         pmesh%varname(3)='Re_omega'
-         pmesh%varname(4)='nondimOmega_P'
-         pmesh%varname(5)='nondimOmega_F'
-         pmesh%varname(6)='torque_coeff'
          pmesh%vecname(1)='velocity'
          pmesh%vecname(2)='ang_vel'
          pmesh%vecname(3)='Acol'
          pmesh%vecname(4)='Tcol'
-         pmesh%vecname(5)='torque'
-         pmesh%vecname(6)='fsOmegap'
-         pmesh%vecname(7)='fvOmegaf'
-         pmesh%vecname(8)='relativeOmega'
+         pmesh%vecname(5)='SR1:3'
+         pmesh%vecname(6)='SR4:6'
          call lp%update_partmesh(pmesh)
          do i=1,lp%np_
             pmesh%var(1,i)=lp%p(i)%d
             pmesh%var(2,i)=lp%p(i)%Re_p
-            pmesh%var(3,i)=lp%p(i)%Re_omega
-            pmesh%var(4,i)=lp%p(i)%nondimOmega_P
-            pmesh%var(5,i)=lp%p(i)%nondimOmega_F
-            pmesh%var(6,i)=lp%p(i)%torqueCoeff
             pmesh%vec(:,1,i)=lp%p(i)%vel
             pmesh%vec(:,2,i)=lp%p(i)%angVel
             pmesh%vec(:,3,i)=lp%p(i)%Acol
             pmesh%vec(:,4,i)=lp%p(i)%Tcol
-            pmesh%vec(:,5,i)=lp%p(i)%torque
-            pmesh%vec(:,6,i)=lp%p(i)%OmegaP
-            pmesh%vec(:,7,i)=lp%p(i)%OmegaF
-            pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
+            pmesh%vec(:,5,i)=lp%p(i)%SR(1:3)
+            pmesh%vec(:,6,i)=lp%p(i)%SR(4:6)
          end do
       end block create_pmesh
 
@@ -387,7 +414,6 @@ contains
          call ens_out%add_scalar('epsp',lp%VF)
          ! call ens_out%add_vector('Nib',Nxib,Nyib,Nzib)
          call ens_out%add_particle('particles',pmesh)
-         call ens_out%add_vector('vorticity',vort(1,:,:,:),vort(2,:,:,:),vort(3,:,:,:))
          ! Output to ensight
          if (ens_evt%occurs()) call ens_out%write_data(time%t)
       end block create_ensight
@@ -427,13 +453,7 @@ contains
          call lptfile%add_column(time%t,'Time')
          call lptfile%add_column(lp_cfl,'Particle CFL')
          call lptfile%add_column(lp%np,'Particle number')
-         call lptfile%add_column(torqueCoeff_avg,'Average Torque Coeff')
          call lptfile%add_column(Re_p_avg,'Average Re_p')
-         call lptfile%add_column(Re_omega_avg,'Average Re_omega')
-         call lptfile%add_column(OmegaP_avg,'Average OmegaP')
-         call lptfile%add_column(OmegaF_avg,'Average OmegaF')
-         call lptfile%add_column(OmegaRela_avg,'Average OmegaRela')
-         call lptfile%add_column(Torque_avg,'Average Torque')
          call lptfile%write()
       end block create_monitor
 
@@ -466,10 +486,11 @@ contains
          call lp%collide(dt=time%dtmid, Gib=Gib, Nxib=Nxib, Nyib=Nyib, Nzib=Nzib)
 
          call fs%get_div_stress(resU,resV,resW)
-         call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=fs%rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
-            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,vortx=vort(1,:,:,:),vorty=vort(2,:,:,:),vortz=vort(3,:,:,:),&
+         call lp%advance(dt=time%dtmid,U=fs%U,V=fs%V,W=fs%W,rho=rho,visc=fs%visc,stress_x=resU,stress_y=resV,stress_z=resW,&
+            srcU=srcUlp,srcV=srcVlp,srcW=srcWlp,&
             tdevu=DuDt,tdevv=DvDt,tdevw=DwDt)
 
+         call get_particle_strainrate()
          call getAverageParticleCoeff()
 
          ! Turbulence modeling
@@ -479,7 +500,6 @@ contains
             sgs%visc=-fs%visc
          end where
          fs%visc=fs%visc+sgs%visc
-
 
          ! Update density based on particle volume fraction
          fs%rho=rho*(1.0_WP-lp%VF)
@@ -580,8 +600,7 @@ contains
          ! Recompute interpolated velocity and divergence
          call fs%interp_vel(Ui,Vi,Wi)
          call fs%get_div(drhodt=resRho)
-         call fs%get_vorticity(vort)
-         call get_material_deviation()
+         call get_fluid_acc()
 
          ! Output to ensight
          if (ens_evt%occurs()) then
@@ -591,45 +610,15 @@ contains
                do i=1,lp%np_
                   pmesh%var(1,i)=lp%p(i)%d
                   pmesh%var(2,i)=lp%p(i)%Re_p
-                  pmesh%var(3,i)=lp%p(i)%Re_omega
-                  pmesh%var(4,i)=lp%p(i)%nondimOmega_P
-                  pmesh%var(5,i)=lp%p(i)%nondimOmega_F
-                  pmesh%var(6,i)=lp%p(i)%torqueCoeff
                   pmesh%vec(:,1,i)=lp%p(i)%vel
                   pmesh%vec(:,2,i)=lp%p(i)%angVel
                   pmesh%vec(:,3,i)=lp%p(i)%Acol
                   pmesh%vec(:,4,i)=lp%p(i)%Tcol
-                  pmesh%vec(:,5,i)=lp%p(i)%torque
-                  pmesh%vec(:,6,i)=lp%p(i)%OmegaP
-                  pmesh%vec(:,7,i)=lp%p(i)%OmegaF
-                  pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
+                  pmesh%vec(:,5,i)=lp%p(i)%SR(1:3)
+                  pmesh%vec(:,6,i)=lp%p(i)%SR(4:6)
                end do
             end block update_pmesh
             call ens_out%write_data(time%t)
-         else
-            if ( (time%t.gt.0.3_WP) .and. (torqueCoeff_avg .gt. 100) ) then
-               update_1pmesh: block
-                  integer :: i
-                  call lp%update_partmesh(pmesh)
-                  do i=1,lp%np_
-                     pmesh%var(1,i)=lp%p(i)%d
-                     pmesh%var(2,i)=lp%p(i)%Re_p
-                     pmesh%var(3,i)=lp%p(i)%Re_omega
-                     pmesh%var(4,i)=lp%p(i)%nondimOmega_P
-                     pmesh%var(5,i)=lp%p(i)%nondimOmega_F
-                     pmesh%var(6,i)=lp%p(i)%torqueCoeff
-                     pmesh%vec(:,1,i)=lp%p(i)%vel
-                     pmesh%vec(:,2,i)=lp%p(i)%angVel
-                     pmesh%vec(:,3,i)=lp%p(i)%Acol
-                     pmesh%vec(:,4,i)=lp%p(i)%Tcol
-                     pmesh%vec(:,5,i)=lp%p(i)%torque
-                     pmesh%vec(:,6,i)=lp%p(i)%OmegaP
-                     pmesh%vec(:,7,i)=lp%p(i)%OmegaF
-                     pmesh%vec(:,8,i)=lp%p(i)%OmegaRela
-                  end do
-               end block update_1pmesh
-               call ens_out%write_data(time%t)
-            end if
          end if
 
          ! Perform and output monitoring
