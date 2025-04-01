@@ -276,7 +276,7 @@ contains
                pz = r*sin(theta)
 
                theta = theta + dtheta
-               if (theta > twoPi) then
+               if (theta .ge. (twoPi-dtheta)) then
                   theta = 0.0_WP
                   r = r + dis
                   if (r .gt. (tankRadius-2.0*dp)) then
