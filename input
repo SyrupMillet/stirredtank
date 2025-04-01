@@ -2,15 +2,15 @@
 Partition : 1 1 8
 
 # Mesh definition
-Lx : 0.32
-Ly : 0.32
-Lz : 0.32
-nx : 80
-ny : 80
-nz : 80
-tank radius : 0.14
-tank height : 0.28
-liquid height : 0.15
+Lx : 0.38
+Ly : 0.38
+Lz : 0.38
+nx : 64
+ny : 64
+nz : 64
+tank radius : 0.1825
+tank height : 0.365
+#liquid height : 0.15
 
 # Fluid properties
 Gravity :                   0 -9.81 0
@@ -21,9 +21,10 @@ Density :                   1000
 Coefficient of restitution : 0.8
 Wall restitution : 0.8
 Friction coefficient : 0.1
-Number of particles : 6000
-Particle density :  900
-Particle diameter : 1.5e-3
+Number of particles : 148700
+Number of particles : 0
+Particle density :  2500
+Particle diameter : 3e-3
 #Collision timescale : 15e-5
 
 # Rotor Disk properties
@@ -43,7 +44,7 @@ Rotor Disk max radius : 0.08
 Rotor Disk center : 0.0 0.08 0.0
 Rotor Disk axis : 0.0 1.0 0.0
 Rotor Disk reference direction : 1.0 0.0 0.0
-Rotor Disk angular velocity : 320      # rpm
+Rotor Disk angular velocity : 0      # rpm
 
 # Time integration
 Max timestep size : 1e-4

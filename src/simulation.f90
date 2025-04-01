@@ -230,9 +230,13 @@ contains
       ! Initialize LPT solver
       initialize_lpt: block
          use random, only: random_uniform
-         real(WP) :: dp, tankRadius, xStart, zStart,yStart, px, py, pz
+         use mathtools, only: Pi, twoPi
+         real(WP) :: dp, tankRadius, px, py, pz
          integer :: i,j,np,npPerAxis, tmp
          real(WP), dimension(3) :: diskPos
+         real(WP) :: r, theta, dtheta, dis
+         real(WP) :: tankheight, Ly
+
          ! Create solver
          lp=lptl(cfg=cfg,name='LPT')
          ! Get drag model from the inpit
@@ -249,10 +253,15 @@ contains
          ! Get tank radius
          call param_read("Rotor Disk center", diskPos)
          call param_read('tank radius',tankRadius)
-         npPerAxis = int(floor(tankRadius/(sqrt(2.0_WP)*cfg%min_meshsize)))*2
-         xStart = -0.5_WP*npPerAxis*cfg%min_meshsize
-         zStart = -0.5_WP*npPerAxis*cfg%min_meshsize
-         yStart = diskPos(2)
+         call param_read('tank height',tankheight)
+         call param_read('Ly',Ly)
+         
+         dis = 3.0_WP*dp/2.0_WP
+         r = 2.0_WP*dp
+         dtheta = acos((2.0_WP*r**2 - dis**2)/(2.0_WP*r**2))
+         theta = 0.0_WP
+
+         py = (Ly - tankheight)/2.0_WP + dp
 
          ! Root process initializes np particles randomly
          if (lp%cfg%amRoot) then
@@ -262,11 +271,22 @@ contains
                lp%p(i)%id=int(i,8)
                ! Set the diameter
                lp%p(i)%d=dp
-               ! assign position in the domain
-               py = int(floor(real(i,WP)/(npPerAxis**2)))*cfg%min_meshsize+yStart
-               tmp = mod(i,npPerAxis**2)
-               px = int(floor(real(tmp,WP)/npPerAxis))*cfg%min_meshsize+xStart
-               pz = mod(tmp,npPerAxis)*cfg%min_meshsize+zStart
+
+               px = r*cos(theta)
+               pz = r*sin(theta)
+
+               theta = theta + dtheta
+               if (theta > twoPi) then
+                  theta = 0.0_WP
+                  r = r + dis
+                  if (r .gt. (tankRadius-2.0*dp)) then
+                     r = 2.0_WP*dp
+                     py = py + dis
+                  end if
+                  dtheta = acos((2.0_WP*r**2 - dis**2)/(2.0_WP*r**2))
+               end if
+
+
                lp%p(i)%pos= [px,py,pz]
                ! Give zero velocity
                lp%p(i)%vel=0.0_WP
@@ -407,7 +427,7 @@ contains
          call ens_out%add_scalar('VF',cfg%VF)
          call ens_out%add_scalar('pressure',fs%P)
          ! call ens_out%add_scalar('divergence',fs%div)
-         ! call ens_out%add_scalar('diskArea',rd%area)
+         call ens_out%add_scalar('diskArea',rd%area)
          call ens_out%add_vector('diskForce',rd%forceX,rd%forceY,rd%forceZ)
          ! call ens_out%add_scalar('Density',fs%rho)
          call ens_out%add_scalar("viscosity",fs%visc)
@@ -460,7 +480,7 @@ contains
    end subroutine simulation_init
 
    subroutine simulation_run
-      use sgsmodel_class, only: constant_smag
+      use sgsmodel_class, only: constant_smag, dynamic_smag
       implicit none
 
       ! Perform time integration
