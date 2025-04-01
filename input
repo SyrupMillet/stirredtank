@@ -14,15 +14,14 @@ tank height : 0.365
 
 # Fluid properties
 Gravity :                   0 -9.81 0
-Dynamic viscosity:          0.001
-Density :                   1000
+Dynamic viscosity:          1.0
+Density :                   1390
 
 # Particle parameters
-Coefficient of restitution : 0.8
-Wall restitution : 0.8
-Friction coefficient : 0.1
+Coefficient of restitution : 0.9
+Wall restitution : 0.9
+Friction coefficient : 0.3
 Number of particles : 148700
-Number of particles : 0
 Particle density :  2500
 Particle diameter : 3e-3
 #Collision timescale : 15e-5
@@ -30,26 +29,26 @@ Particle diameter : 3e-3
 # Rotor Disk properties
 # Blade
 Number of radical points : 2
-Blade radius : 0.03 0.08
-Blade twists : -30.0 -30.0
-Blade Chords : 0.02 0.02
+Blade radius : 0.0365 0.06085
+Blade twists : -45.0 -45.0
+Blade Chords : 0.10324 0.10324
 Number of azimuthal points : 9
 Blade AoA : -180 -135 -90 -45 0 45 90 135 180
 Blade Cd : 0 1.0 1.25 1.0 0 1.0 1.25 1.0 0
 Blade Cl : 0 1.0 0 -1.0 0 1.0 0 -1.0 0
 # Rotor Disk
 Rotor Disk number of blades : 4
-Rotor Disk min radius : 0.03
-Rotor Disk max radius : 0.08
-Rotor Disk center : 0.0 0.08 0.0
+Rotor Disk min radius : 0.0365
+Rotor Disk max radius : 0.06085
+Rotor Disk center : 0.0 0.09125 0.0
 Rotor Disk axis : 0.0 1.0 0.0
 Rotor Disk reference direction : 1.0 0.0 0.0
 Rotor Disk angular velocity : 0      # rpm
 
 # Time integration
-Max timestep size : 1e-4
+Max timestep size : 1e-3
 Max cfl number :    0.95
 Max time :          10
 
 # Ensight output
-Ensight output period : 1e-1
+Ensight output period : 1e-2

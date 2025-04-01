@@ -656,6 +656,8 @@ contains
 
       implicit none
 
+      call lp%write("particles.lpt")
+
       ! Deallocate work arrays
       deallocate_work_arrays: block
          deallocate(resU,resV,resW,resRho)
