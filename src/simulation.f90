@@ -263,6 +263,8 @@ contains
 
          py = (Ly - tankheight)/2.0_WP + dp
 
+         ! call lp%read('particles.lpt')
+
          ! Root process initializes np particles randomly
          if (lp%cfg%amRoot) then
             call lp%resize(np)
@@ -399,8 +401,8 @@ contains
          pmesh%vecname(2)='ang_vel'
          pmesh%vecname(3)='Acol'
          pmesh%vecname(4)='Tcol'
-         pmesh%vecname(5)='SR1:3'
-         pmesh%vecname(6)='SR4:6'
+         pmesh%vecname(5)='SR13'
+         pmesh%vecname(6)='SR46'
          call lp%update_partmesh(pmesh)
          do i=1,lp%np_
             pmesh%var(1,i)=lp%p(i)%d
@@ -620,6 +622,8 @@ contains
          ! Recompute interpolated velocity and divergence
          call fs%interp_vel(Ui,Vi,Wi)
          call fs%get_div(drhodt=resRho)
+
+
          call get_fluid_acc()
 
          ! Output to ensight
@@ -656,7 +660,7 @@ contains
 
       implicit none
 
-      call lp%write("particles.lpt")
+      ! call lp%write("particles.lpt")
 
       ! Deallocate work arrays
       deallocate_work_arrays: block
